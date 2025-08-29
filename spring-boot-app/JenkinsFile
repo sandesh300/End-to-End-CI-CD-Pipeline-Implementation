@@ -2,7 +2,7 @@ pipeline {
   agent {
     docker {
       image 'sandesh030/ultimate-cicd:latest'
-      args '--user root -v /var/run/docker/sock:/var/run/docker.sock' // mount Docker socket to access the host's Docker daemon
+      args '--user root -v /var/run/docker.sock:/var/run/docker.sock'
     }
   }
   stages {
@@ -25,14 +25,19 @@ pipeline {
           ls -la
           echo "Docker info:"
           docker --version
-          docker info
+          echo "Checking if Docker daemon is accessible:"
+          docker ps || echo "Docker daemon not accessible"
         '''
       }
     }
     
     stage('Build and Test') {
       steps {
-        sh 'cd End-to-End-CI-CD-Pipeline-Implementation/spring-boot-app && mvn clean package'
+        sh '''
+          echo "Building Spring Boot application..."
+          cd spring-boot-app
+          mvn clean package -DskipTests=false
+        '''
       }
     }
     
@@ -42,7 +47,10 @@ pipeline {
       }
       steps {
         withCredentials([string(credentialsId: 'sonarqube', variable: 'SONAR_AUTH_TOKEN')]) {
-          sh 'cd End-to-End-CI-CD-Pipeline-Implementation/spring-boot-app && mvn sonar:sonar -Dsonar.login=$SONAR_AUTH_TOKEN -Dsonar.host.url=${SONAR_URL}'
+          sh '''
+            cd spring-boot-app
+            mvn sonar:sonar -Dsonar.login=$SONAR_AUTH_TOKEN -Dsonar.host.url=${SONAR_URL}
+          '''
         }
       }
     }
@@ -50,17 +58,24 @@ pipeline {
     stage('Build and Push Docker Image') {
       environment {
         DOCKER_IMAGE = "sandesh030/ultimate-cicd:${BUILD_NUMBER}"
-        REGISTRY_CREDENTIALS = credentials('docker-cred')
       }
       steps {
         script {
-          sh 'cd End-to-End-CI-CD-Pipeline-Implementation/spring-boot-app && docker build -t ${DOCKER_IMAGE} .'
           withCredentials([usernamePassword(credentialsId: 'docker-cred', usernameVariable: 'DOCKER_USERNAME', passwordVariable: 'DOCKER_PASSWORD')]) {
-            sh """
-              docker login -u $DOCKER_USERNAME -p $DOCKER_PASSWORD
+            sh '''
+              cd spring-boot-app
+              echo "Building Docker image: ${DOCKER_IMAGE}"
+              docker build -t ${DOCKER_IMAGE} .
+              
+              echo "Logging into Docker Hub..."
+              echo $DOCKER_PASSWORD | docker login -u $DOCKER_USERNAME --password-stdin
+              
+              echo "Pushing Docker image..."
               docker push ${DOCKER_IMAGE}
+              
+              echo "Logging out from Docker Hub..."
               docker logout
-            """
+            '''
           }
         }
       }
@@ -76,11 +91,28 @@ pipeline {
           sh '''
             git config user.email "bhujbalsandesh52@gmail.com"
             git config user.name "sandesh bhujbal"
-            BUILD_NUMBER=${BUILD_NUMBER}
-            sed -i "s/replaceImageTag/${BUILD_NUMBER}/g" java-maven-sonar-argocd-helm-k8s/spring-boot-app-manifests/deployment.yml
-            git add java-maven-sonar-argocd-helm-k8s/spring-boot-app-manifests/deployment.yml
-            git commit -m "Update deployment image to version ${BUILD_NUMBER}"
-            git push https://${GITHUB_TOKEN}@github.com/${GIT_USER_NAME}/${GIT_REPO_NAME} HEAD:main
+            
+            echo "Current build number: ${BUILD_NUMBER}"
+            
+            # Update the deployment file
+            if [ -f "java-maven-sonar-argocd-helm-k8s/spring-boot-app-manifests/deployment.yml" ]; then
+              sed -i "s/replaceImageTag/${BUILD_NUMBER}/g" java-maven-sonar-argocd-helm-k8s/spring-boot-app-manifests/deployment.yml
+              
+              # Check if there are any changes to commit
+              if git diff --staged --quiet; then
+                git add java-maven-sonar-argocd-helm-k8s/spring-boot-app-manifests/deployment.yml
+              fi
+              
+              if ! git diff --staged --quiet; then
+                git commit -m "Update deployment image to version ${BUILD_NUMBER}"
+                git push https://${GITHUB_TOKEN}@github.com/${GIT_USER_NAME}/${GIT_REPO_NAME} HEAD:main
+              else
+                echo "No changes to commit"
+              fi
+            else
+              echo "Warning: deployment.yml not found"
+              ls -la java-maven-sonar-argocd-helm-k8s/spring-boot-app-manifests/ || echo "Directory not found"
+            fi
           '''
         }
       }
@@ -93,6 +125,21 @@ pipeline {
           docker system prune -f || true
         '''
       }
+    }
+  }
+  
+  post {
+    failure {
+      echo "Pipeline failed! Check the logs above for details."
+    }
+    success {
+      echo "Pipeline completed successfully!"
+    }
+    always {
+      sh '''
+        echo "=== Final Cleanup ==="
+        docker system df || true
+      '''
     }
   }
 }
