@@ -1,62 +1,80 @@
-# Spring Boot based Java web application
- 
-This is a simple Sprint Boot based Java application that can be built using Maven. Sprint Boot dependencies are handled using the pom.xml 
-at the root directory of the repository.
 
-This is a MVC architecture based application where controller returns a page with title and message attributes to the view.
 
-## Execute the application locally and access it using your browser
+````
+# Spring Boot Based Java Web Application
 
-Checkout the repo and move to the directory
+This is a simple **Spring Boot** based Java application that can be built using **Maven**.  
+Spring Boot dependencies are handled using the `pom.xml` at the root directory of the repository.
 
-```
+This application follows the **MVC architecture** where the controller returns a page with `title` and `message` attributes to the view.
+
+---
+
+## 🚀 Execute the Application Locally and Access via Browser
+
+### 1. Clone the Repository
+```bash
 git clone https://github.com/iam-veeramalla/Jenkins-Zero-To-Hero/java-maven-sonar-argocd-helm-k8s/sprint-boot-app
 cd java-maven-sonar-argocd-helm-k8s/sprint-boot-app
-```
+````
 
-Execute the Maven targets to generate the artifacts
+### 2. Build the Maven Artifacts
 
-```
+```bash
 mvn clean package
 ```
 
-The above maven target stroes the artifacts to the `target` directory. You can either execute the artifact on your local machine
-(or) run it as a Docker container.
+The above command stores the artifacts in the `target` directory.
+You can run the artifact directly **(requires Java 11)** or run it as a **Docker container**.
 
-** Note: To avoid issues with local setup, Java versions and other dependencies, I would recommend the docker way. **
+> 💡 **Recommendation:** Use Docker to avoid local setup issues with Java versions and dependencies.
 
+---
 
-### Execute locally (Java 11 needed) and access the application on http://localhost:8080
+## ▶️ Running the Application
 
-```
+### Option 1: Execute Locally (Java 11 Required)
+
+```bash
 java -jar target/spring-boot-web.jar
 ```
 
-### The Docker way
+Access the application at: **[http://localhost:8080](http://localhost:8080)**
 
-Build the Docker Image
+---
 
-```
-docker build -t ultimate-cicd-pipeline:v1 .
-```
+### Option 2: Run with Docker
 
-```
-docker run -d -p 8010:8080 -t ultimate-cicd-pipeline:v1
-```
+1. **Build the Docker Image**
 
-Hurray !! Access the application on `http://<ip-address>:8010`
+   ```bash
+   docker build -t ultimate-cicd-pipeline:v1 .
+   ```
 
+2. **Run the Container**
 
-## Next Steps
+   ```bash
+   docker run -d -p 8010:8080 -t ultimate-cicd-pipeline:v1
+   ```
 
-### Configure a Sonar Server locally
+Access the application at:
+**http\://<ip-address>:8010**
 
-```
-System Requirements
-Java 17+ (Oracle JDK, OpenJDK, or AdoptOpenJDK)
-Hardware Recommendations:
-   Minimum 2 GB RAM
-   2 CPU cores
+---
+
+## 🔧 Next Steps – Configure SonarQube Server Locally
+
+### System Requirements
+
+* **Java 17+** (Oracle JDK, OpenJDK, or AdoptOpenJDK)
+* **Hardware Recommendations:**
+
+  * Minimum **2 GB RAM**
+  * **2 CPU cores**
+
+### Installation Steps
+
+```bash
 sudo apt update && sudo apt install unzip -y
 adduser sonarqube
 wget https://binaries.sonarsource.com/Distribution/sonarqube/sonarqube-10.4.1.88267.zip
@@ -67,6 +85,10 @@ cd /opt/sonarqube/bin/linux-x86-64
 ./sonar.sh start
 ```
 
-Hurray !! Now you can access the `SonarQube Server` on `http://<ip-address>:9000` 
+Access SonarQube at:
+**http\://<ip-address>:9000**
 
+---
 
+🎉 **Hurray!** Your Spring Boot app and SonarQube setup are ready!
+```
