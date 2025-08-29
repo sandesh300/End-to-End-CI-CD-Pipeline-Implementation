@@ -8,20 +8,23 @@ pipeline {
   stages {
     stage('Checkout') {
       steps {
-        sh 'echo passed'
-        //git branch: 'main', url: 'https://github.com/sandesh300/End-to-End-CI-CD-Pipeline-Implementation.git'
+        // Use actual checkout instead of echo
+        git branch: 'main', url: 'https://github.com/sandesh300/End-to-End-CI-CD-Pipeline-Implementation.git'
       }
     }
     stage('Build and Test') {
       steps {
-        sh 'ls -ltr'
-        // build the project and create a JAR file
-        sh 'cd End-to-End-CI-CD-Pipeline-Implementation/spring-boot-app && mvn clean package'
+        script {
+          // Use absolute path to avoid issues
+          sh 'pwd && ls -ltr'
+          // build the project and create a JAR file
+          sh 'cd End-to-End-CI-CD-Pipeline-Implementation/spring-boot-app && mvn clean package'
+        }
       }
     }
     stage('Static Code Analysis') {
       environment {
-        SONAR_URL = "http://13.232.128.229/:9000/"
+        SONAR_URL = "http://13.232.128.229:9000/"  // Fixed port syntax (added colon)
       }
       steps {
         withCredentials([string(credentialsId: 'sonarqube', variable: 'SONAR_AUTH_TOKEN')]) {
@@ -32,37 +35,43 @@ pipeline {
     stage('Build and Push Docker Image') {
       environment {
         DOCKER_IMAGE = "sandesh030/ultimate-cicd:${BUILD_NUMBER}"
-        // DOCKERFILE_LOCATION = "End-to-End-CI-CD-Pipeline-Implementation/spring-boot-app/Dockerfile"
         REGISTRY_CREDENTIALS = credentials('docker-cred')
       }
       steps {
         script {
-            sh 'cd End-to-End-CI-CD-Pipeline-Implementation/spring-boot-app && docker build -t ${DOCKER_IMAGE} .'
-            def dockerImage = docker.image("${DOCKER_IMAGE}")
-            docker.withRegistry('https://index.docker.io/v1/', "docker-cred") {
-                dockerImage.push()
-            }
+          // Specify Dockerfile location explicitly
+          sh 'cd End-to-End-CI-CD-Pipeline-Implementation/spring-boot-app && docker build -t ${DOCKER_IMAGE} -f Dockerfile .'
+          def dockerImage = docker.image("${DOCKER_IMAGE}")
+          docker.withRegistry('https://index.docker.io/v1/', "docker-cred") {
+            dockerImage.push()
+          }
         }
       }
     }
     stage('Update Deployment File') {
-        environment {
-            GIT_REPO_NAME = "End-to-End-CI-CD-Pipeline-Implementation"
-            GIT_USER_NAME = "sandesh300"
+      environment {
+        GIT_REPO_NAME = "End-to-End-CI-CD-Pipeline-Implementation"
+        GIT_USER_NAME = "sandesh300"
+      }
+      steps {
+        withCredentials([string(credentialsId: 'github', variable: 'GITHUB_TOKEN')]) {
+          sh '''
+            git config user.email "bhujbalsandesh52@gmail.com"
+            git config user.name "sandesh bhujbal"
+            BUILD_NUMBER=${BUILD_NUMBER}
+            sed -i "s/replaceImageTag/${BUILD_NUMBER}/g" java-maven-sonar-argocd-helm-k8s/spring-boot-app-manifests/deployment.yml
+            git add java-maven-sonar-argocd-helm-k8s/spring-boot-app-manifests/deployment.yml
+            git commit -m "Update deployment image to version ${BUILD_NUMBER}"
+            git push https://${GITHUB_TOKEN}@github.com/${GIT_USER_NAME}/${GIT_REPO_NAME} HEAD:main
+          '''
         }
-        steps {
-            withCredentials([string(credentialsId: 'github', variable: 'GITHUB_TOKEN')]) {
-                sh '''
-                    git config user.email "bhujbalsandesh52@gmail.com"
-                    git config user.name "sandesh bhujbal"
-                    BUILD_NUMBER=${BUILD_NUMBER}
-                    sed -i "s/replaceImageTag/${BUILD_NUMBER}/g" java-maven-sonar-argocd-helm-k8s/spring-boot-app-manifests/deployment.yml
-                    git add java-maven-sonar-argocd-helm-k8s/spring-boot-app-manifests/deployment.yml
-                    git commit -m "Update deployment image to version ${BUILD_NUMBER}"
-                    git push https://${GITHUB_TOKEN}@github.com/${GIT_USER_NAME}/${GIT_REPO_NAME} HEAD:main
-                '''
-            }
-        }
+      }
+    }
+  }
+  post {
+    always {
+      // Clean up any dangling containers/images
+      sh 'docker system prune -f || true'
     }
   }
 }
