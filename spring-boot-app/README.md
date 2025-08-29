@@ -1,6 +1,3 @@
-
-
-````
 # Spring Boot Based Java Web Application
 
 This is a simple **Spring Boot** based Java application that can be built using **Maven**.  
@@ -14,7 +11,7 @@ This application follows the **MVC architecture** where the controller returns a
 
 ### 1. Clone the Repository
 ```bash
-git clone https://github.com/iam-veeramalla/Jenkins-Zero-To-Hero/java-maven-sonar-argocd-helm-k8s/sprint-boot-app
+git clone https://github.com/sandesh300/End-to-End-CI-CD-Pipeline-Implementation/spring-boot-app
 cd java-maven-sonar-argocd-helm-k8s/sprint-boot-app
 ````
 
