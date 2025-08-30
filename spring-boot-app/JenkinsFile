@@ -118,7 +118,7 @@ pipeline {
             echo "Current build number: ${BUILD_NUMBER}"
             
             # Update the deployment file
-            DEPLOYMENT_FILE="java-maven-sonar-argocd-helm-k8s/spring-boot-app-manifests/deployment.yml"
+            DEPLOYMENT_FILE="End-to-End-CI-CD-Pipeline-Implementation/spring-boot-app-manifests/deployment.yml"
             
             if [ -f "$DEPLOYMENT_FILE" ]; then
               echo "Found deployment file: $DEPLOYMENT_FILE"
