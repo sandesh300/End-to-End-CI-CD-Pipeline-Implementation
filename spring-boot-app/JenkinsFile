@@ -146,7 +146,7 @@ pipeline {
             else
               echo "Warning: deployment.yml not found at $DEPLOYMENT_FILE"
               echo "Available files in java-maven-sonar-argocd-helm-k8s/:"
-              find java-maven-sonar-argocd-helm-k8s/ -name "*.yml" -o -name "*.yaml" 2>/dev/null || echo "Directory or files not found"
+              find End-to-End-CI-CD-Pipeline-Implementation/ -name "*.yml" -o -name "*.yaml" 2>/dev/null || echo "Directory or files not found"
             fi
           '''
         }
@@ -167,29 +167,35 @@ pipeline {
   
   post {
     always {
-      // Fix: Wrap sh steps in node to provide proper context
-      node {
-        sh '''
-          echo "=== Final Cleanup ==="
-          docker system df || true
-          echo "=== Pipeline completed ==="
-        '''
+      script {
+        try {
+          sh '''
+            echo "=== Final Cleanup ==="
+            docker system df || true
+            echo "=== Pipeline completed ==="
+          '''
+        } catch (Exception e) {
+          echo "Cleanup failed: ${e.getMessage()}"
+        }
       }
     }
     failure {
-      // Fix: Wrap sh steps in node to provide proper context
-      node {
-        sh '''
-          echo "=== Pipeline Failed - Debug Info ==="
-          echo "Current directory:"
-          pwd
-          echo "Available files:"
-          ls -la
-          echo "Docker containers:"
-          docker ps -a || echo "Cannot list containers"
-          echo "Docker images:"
-          docker images || echo "Cannot list images"
-        '''
+      script {
+        try {
+          sh '''
+            echo "=== Pipeline Failed - Debug Info ==="
+            echo "Current directory:"
+            pwd
+            echo "Available files:"
+            ls -la
+            echo "Docker containers:"
+            docker ps -a || echo "Cannot list containers"
+            echo "Docker images:"
+            docker images || echo "Cannot list images"
+          '''
+        } catch (Exception e) {
+          echo "Debug info failed: ${e.getMessage()}"
+        }
       }
       echo "Pipeline failed! Check the logs above for details."
     }
