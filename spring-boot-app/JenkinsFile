@@ -3,12 +3,23 @@ pipeline {
     docker {
       image 'sandesh030/ultimate-cicd:latest'
       args '--user root -v /var/run/docker.sock:/var/run/docker.sock'
+      // Keep container alive longer
+      reuseNode true
     }
   }
+  
+  environment {
+    DOCKER_IMAGE = "sandesh030/ultimate-cicd:${BUILD_NUMBER}"
+    SONAR_URL = "http://13.201.80.214:9000/"
+    GIT_REPO_NAME = "End-to-End-CI-CD-Pipeline-Implementation"
+    GIT_USER_NAME = "sandesh300"
+  }
+  
   stages {
     stage('Checkout') {
       steps {
-        git branch: 'main', url: 'https://github.com/sandesh300/End-to-End-CI-CD-Pipeline-Implementation.git'
+        // Fix: Use master branch instead of main to match your repo
+        git branch: 'master', url: 'https://github.com/sandesh300/End-to-End-CI-CD-Pipeline-Implementation.git'
       }
     }
     
@@ -17,16 +28,18 @@ pipeline {
         sh '''
           echo "=== Debug Information ==="
           echo "Java version:"
-          java -version
+          java -version || echo "Java not found"
           echo "Maven version:"
-          mvn --version
+          mvn --version || echo "Maven not found"
           echo "Current directory:"
           pwd
           ls -la
           echo "Docker info:"
-          docker --version
+          docker --version || echo "Docker not found"
           echo "Checking if Docker daemon is accessible:"
           docker ps || echo "Docker daemon not accessible"
+          echo "Checking spring-boot-app directory:"
+          ls -la spring-boot-app/ || echo "spring-boot-app directory not found"
         '''
       }
     }
@@ -35,16 +48,25 @@ pipeline {
       steps {
         sh '''
           echo "Building Spring Boot application..."
-          cd spring-boot-app
-          mvn clean package -DskipTests=false
+          if [ -d "spring-boot-app" ]; then
+            cd spring-boot-app
+            # Check if pom.xml exists
+            if [ -f "pom.xml" ]; then
+              mvn clean package -DskipTests=false
+            else
+              echo "Error: pom.xml not found in spring-boot-app directory"
+              exit 1
+            fi
+          else
+            echo "Error: spring-boot-app directory not found"
+            ls -la
+            exit 1
+          fi
         '''
       }
     }
     
     stage('Static Code Analysis') {
-      environment {
-        SONAR_URL = "http://13.201.80.214:9000/"
-      }
       steps {
         withCredentials([string(credentialsId: 'sonarqube', variable: 'SONAR_AUTH_TOKEN')]) {
           sh '''
@@ -56,15 +78,20 @@ pipeline {
     }
     
     stage('Build and Push Docker Image') {
-      environment {
-        DOCKER_IMAGE = "sandesh030/ultimate-cicd:${BUILD_NUMBER}"
-      }
       steps {
         script {
           withCredentials([usernamePassword(credentialsId: 'docker-cred', usernameVariable: 'DOCKER_USERNAME', passwordVariable: 'DOCKER_PASSWORD')]) {
             sh '''
               cd spring-boot-app
               echo "Building Docker image: ${DOCKER_IMAGE}"
+              
+              # Check if Dockerfile exists
+              if [ ! -f "Dockerfile" ]; then
+                echo "Error: Dockerfile not found in spring-boot-app directory"
+                exit 1
+              fi
+              
+              # Build Docker image
               docker build -t ${DOCKER_IMAGE} .
               
               echo "Logging into Docker Hub..."
@@ -82,10 +109,6 @@ pipeline {
     }
     
     stage('Update Deployment File') {
-      environment {
-        GIT_REPO_NAME = "End-to-End-CI-CD-Pipeline-Implementation"
-        GIT_USER_NAME = "sandesh300"
-      }
       steps {
         withCredentials([string(credentialsId: 'github', variable: 'GITHUB_TOKEN')]) {
           sh '''
@@ -95,23 +118,35 @@ pipeline {
             echo "Current build number: ${BUILD_NUMBER}"
             
             # Update the deployment file
-            if [ -f "java-maven-sonar-argocd-helm-k8s/spring-boot-app-manifests/deployment.yml" ]; then
-              sed -i "s/replaceImageTag/${BUILD_NUMBER}/g" java-maven-sonar-argocd-helm-k8s/spring-boot-app-manifests/deployment.yml
+            DEPLOYMENT_FILE="java-maven-sonar-argocd-helm-k8s/spring-boot-app-manifests/deployment.yml"
+            
+            if [ -f "$DEPLOYMENT_FILE" ]; then
+              echo "Found deployment file: $DEPLOYMENT_FILE"
+              
+              # Show file content before modification
+              echo "=== Before modification ==="
+              cat $DEPLOYMENT_FILE
+              
+              # Update the image tag
+              sed -i "s/replaceImageTag/${BUILD_NUMBER}/g" $DEPLOYMENT_FILE
+              
+              # Show file content after modification
+              echo "=== After modification ==="
+              cat $DEPLOYMENT_FILE
               
               # Check if there are any changes to commit
-              if git diff --staged --quiet; then
-                git add java-maven-sonar-argocd-helm-k8s/spring-boot-app-manifests/deployment.yml
-              fi
-              
-              if ! git diff --staged --quiet; then
-                git commit -m "Update deployment image to version ${BUILD_NUMBER}"
-                git push https://${GITHUB_TOKEN}@github.com/${GIT_USER_NAME}/${GIT_REPO_NAME} HEAD:main
+              if git diff --quiet; then
+                echo "No changes detected"
               else
-                echo "No changes to commit"
+                echo "Changes detected, committing..."
+                git add $DEPLOYMENT_FILE
+                git commit -m "Update deployment image to version ${BUILD_NUMBER}"
+                git push https://${GITHUB_TOKEN}@github.com/${GIT_USER_NAME}/${GIT_REPO_NAME} HEAD:master
               fi
             else
-              echo "Warning: deployment.yml not found"
-              ls -la java-maven-sonar-argocd-helm-k8s/spring-boot-app-manifests/ || echo "Directory not found"
+              echo "Warning: deployment.yml not found at $DEPLOYMENT_FILE"
+              echo "Available files in java-maven-sonar-argocd-helm-k8s/:"
+              find java-maven-sonar-argocd-helm-k8s/ -name "*.yml" -o -name "*.yaml" 2>/dev/null || echo "Directory or files not found"
             fi
           '''
         }
@@ -122,24 +157,44 @@ pipeline {
       steps {
         sh '''
           echo "Cleaning up Docker resources..."
-          docker system prune -f || true
+          # Clean up old images but keep recent ones
+          docker image prune -f || true
+          echo "Cleanup completed"
         '''
       }
     }
   }
   
   post {
+    always {
+      // Fix: Wrap sh steps in node to provide proper context
+      node {
+        sh '''
+          echo "=== Final Cleanup ==="
+          docker system df || true
+          echo "=== Pipeline completed ==="
+        '''
+      }
+    }
     failure {
+      // Fix: Wrap sh steps in node to provide proper context
+      node {
+        sh '''
+          echo "=== Pipeline Failed - Debug Info ==="
+          echo "Current directory:"
+          pwd
+          echo "Available files:"
+          ls -la
+          echo "Docker containers:"
+          docker ps -a || echo "Cannot list containers"
+          echo "Docker images:"
+          docker images || echo "Cannot list images"
+        '''
+      }
       echo "Pipeline failed! Check the logs above for details."
     }
     success {
       echo "Pipeline completed successfully!"
-    }
-    always {
-      sh '''
-        echo "=== Final Cleanup ==="
-        docker system df || true
-      '''
     }
   }
 }
