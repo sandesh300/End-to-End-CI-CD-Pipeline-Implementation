@@ -2,14 +2,14 @@ pipeline {
   agent {
     docker {
       image 'sandesh030/ultimate-cicd:latest'
-      args '--user root -v /var/run/docker.sock:/var/run/docker.sock' // mount Docker socket to access the host's Docker daemon
+      args '--user root -v /var/run/docker.sock:/var/run/docker.sock --entrypoint="" --rm'
     }
   }
   stages {
     stage('Checkout') {
       steps {
         sh 'echo passed'
-        //git branch: 'main', url: 'https://github.com/sandesh300/End-to-End-CI-CD-Pipeline-Implementation.git'
+        //git branch: 'master', url: 'https://github.com/sandesh300/End-to-End-CI-CD-Pipeline-Implementation.git'
       }
     }
     stage('Build and Test') {
@@ -32,7 +32,6 @@ pipeline {
     stage('Build and Push Docker Image') {
       environment {
         DOCKER_IMAGE = "sandesh030/ultimate-cicd:${BUILD_NUMBER}"
-        // DOCKERFILE_LOCATION = "spring-boot-app/Dockerfile"
         REGISTRY_CREDENTIALS = credentials('docker-cred')
       }
       steps {
